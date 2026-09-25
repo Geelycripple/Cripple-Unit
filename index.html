@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vehicle Inspection Form</title>
-  <!-- Library Scan Barcode/QR Code Versi Stabil -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- Library ZXing: Engine Barcode Industri (Super Cepat & Tajam) -->
+  <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: #f4f6f8; margin: 0; padding: 16px; display: flex; justify-content: center; }
@@ -19,7 +19,11 @@
     
     .btn-scan { background: #38a169; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; width: 100%; margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem; }
     .btn-scan:hover { background: #2f855a; }
-    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 12px; display: none; background: #000; }
+    
+    /* Container Video Kamera High-Definition */
+    #scannerContainer { display: none; position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; margin-bottom: 12px; }
+    #video { width: 100%; height: 220px; object-fit: cover; }
+    .scan-guide { position: absolute; top: 50%; left: 10%; right: 10%; height: 2px; background: #e53e3e; box-shadow: 0 0 8px #e53e3e; transform: translateY(-50%); }
 
     .upload-area { border: 2px dashed #cbd5e0; border-radius: 8px; padding: 12px; text-align: center; background: #faf5ff; cursor: pointer; margin-bottom: 8px; }
     .upload-area p { margin: 0; font-size: 0.85rem; color: #6b46c1; font-weight: 600; }
@@ -43,7 +47,12 @@
     <div class="form-group">
       <label>VIN NO * (Scan Barcode)</label>
       <button type="button" class="btn-scan" id="btnStartScan" onclick="startScanner()">📷 Scan Barcode VIN</button>
-      <div id="reader"></div>
+      
+      <div id="scannerContainer">
+        <video id="video"></video>
+        <div class="scan-guide"></div>
+      </div>
+      
       <input type="text" id="vinNo" placeholder="Hasil Scan VIN akan muncul di sini" readonly required>
     </div>
 
@@ -58,7 +67,7 @@
       </select>
     </div>
 
-    <!-- BODY COLOR (DYNAMIC OPTIONS) -->
+    <!-- BODY COLOR -->
     <div class="form-group">
       <label>BODY COLOR *</label>
       <select id="bodyColor" required disabled>
@@ -102,7 +111,7 @@
   // PASTEKAN URL APPS SCRIPT ANDA DI SINI
   const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyrd5BcB8uQ83Nw0ItxXL4UJ0I0LPuAjz7gQKcdm1VisSqwu8VLSXV1sxzd6RT-yKvk/exec";
 
-  // DATA PILIHAN WARNA BERDASARKAN MODEL
+  // DATA WARNA DINAMIS
   const colorData = {
     "P145": ["MOYU BLACK", "SIMPLE WHITE", "PEARL SILVER", "SUPERSONIC GREEN", "CHINA BLUE", "TWILIGHT GRAY"],
     "E245": ["Carbon Black", "Moonlight Silvery", "Turquoise Green", "Frost Grey", "Snowy White"],
@@ -137,46 +146,64 @@
     }
   }
 
-  // SCANNER BARCODE IMPLEMENTATION (Paling Stabil)
-  let html5QrcodeScanner = null;
+  // IMPLEMENTASI ZXING SCANNER (WECOM-STYLE ULTRA-FAST SCANNER)
+  let codeReader = null;
 
   function startScanner() {
-    const readerDiv = document.getElementById('reader');
-    readerDiv.style.display = 'block';
+    const container = document.getElementById('scannerContainer');
+    container.style.display = 'block';
 
-    if (html5QrcodeScanner === null) {
-      html5QrcodeScanner = new Html5Qrcode("reader");
-    }
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    
+    // Paksa Kamera menggunakan Resolusi HD 1080p agar Garis Barcode Tajam
+    const hints = new Map();
+    const formats = [
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.EAN_13,
+      ZXing.BarcodeFormat.QR_CODE
+    ];
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
 
-    const config = { 
-      fps: 10, 
-      qrbox: { width: 280, height: 120 },
-      aspectRatio: 1.0
-    };
-
-    html5QrcodeScanner.start(
-      { facingMode: "environment" },
-      config,
-      (decodedText) => {
-        document.getElementById('vinNo').value = decodedText;
-        alert("Barcode VIN Berhasil Di-scan: " + decodedText);
-        html5QrcodeScanner.stop().then(() => {
-          readerDiv.style.display = 'none';
+    codeReader.decodeFromConstraints(
+      {
+        video: {
+          facingMode: { exact: "environment" },
+          width: { min: 1280, ideal: 1920 },
+          height: { min: 720, ideal: 1080 }
+        }
+      },
+      'video',
+      (result, err) => {
+        if (result) {
+          const vinScanned = result.getText();
+          document.getElementById('vinNo').value = vinScanned;
+          alert("Barcode VIN Berhasil Di-scan: " + vinScanned);
+          
+          codeReader.reset();
+          container.style.display = 'none';
           document.getElementById('btnStartScan').innerText = "✅ VIN Berhasil Di-scan";
           document.getElementById('btnStartScan').style.background = "#4a5568";
           document.getElementById('btnStartScan').disabled = true;
-        });
-      },
-      (errorMessage) => {
-        // Scanning...
+        }
       }
     ).catch(err => {
-      alert("Gagal membuka kamera. Pastikan izin kamera aktif!");
-      readerDiv.style.display = 'none';
+      // Fallback jika tidak mendukung 'exact environment'
+      codeReader.decodeFromVideoDevice(null, 'video', (result) => {
+        if (result) {
+          document.getElementById('vinNo').value = result.getText();
+          alert("Barcode VIN Berhasil Di-scan: " + result.getText());
+          codeReader.reset();
+          container.style.display = 'none';
+          document.getElementById('btnStartScan').innerText = "✅ VIN Berhasil Di-scan";
+          document.getElementById('btnStartScan').style.background = "#4a5568";
+          document.getElementById('btnStartScan').disabled = true;
+        }
+      });
     });
   }
 
-  // MANAGEMENT FOTO & KOMPRESI
+  // FOTO & KOMPRESI
   let interiorFiles = [];
   let exteriorFiles = [];
 
