@@ -87,6 +87,7 @@
 </div>
 
 <script>
+  // PENTING: TEMPELKAN URL APPS SCRIPT BARU DARI LANGKAH 1 DI BAWAH INI
   const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyrd5BcB8uQ83Nw0ItxXL4UJ0I0LPuAjz7gQKcdm1VisSqwu8VLSXV1sxzd6RT-yKvk/exec";
 
   let interiorFiles = [];
@@ -171,25 +172,22 @@
     btn.disabled = true;
     btn.innerText = 'MENGIRIM DATA...';
 
-    const payload = {
-      vinNo: document.getElementById('vinNo').value,
-      carModel: document.getElementById('carModel').value,
-      bodyColor: document.getElementById('bodyColor').value,
-      lastStation: document.getElementById('lastStation').value,
-      interiorPhotos: interiorFiles,
-      exteriorPhotos: exteriorFiles
-    };
+    // Format data URL Form Standar (Aman untuk iOS Safari)
+    const formData = new URLSearchParams();
+    formData.append('vinNo', document.getElementById('vinNo').value);
+    formData.append('carModel', document.getElementById('carModel').value);
+    formData.append('bodyColor', document.getElementById('bodyColor').value);
+    formData.append('lastStation', document.getElementById('lastStation').value);
+    formData.append('interiorPhotos', JSON.stringify(interiorFiles));
+    formData.append('exteriorPhotos', JSON.stringify(exteriorFiles));
 
-    // PASTEKAN URL WEB APP APPS SCRIPT BARU ANDA DI BAWAH INI
-    const targetUrl = "https://script.google.com/macros/s/AKfycbx6Ewrpj02rjt_DzxRC1QC9Z6i2oopCxj4gwe6stjrnBjxWXWEFaf1wPjNVRVjp7QvH/exec";
-
-    fetch(targetUrl, {
+    fetch(GOOGLE_APPS_SCRIPT_URL, {
       method: 'POST',
-      mode: 'no-cors', // Menembus blokir CORS Safari/iOS
+      mode: 'no-cors',
       headers: {
-        'Content-Type': 'text/plain'
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: JSON.stringify(payload)
+      body: formData
     })
     .then(() => {
       alert('Data dan foto berhasil terkirim ke Google Sheets!');
