@@ -140,14 +140,30 @@
   // SCANNER BARCODE IMPLEMENTATION
   let html5QrcodeScanner;
 
+  // SCANNER BARCODE IMPLEMENTATION (OPTIMIZED FOR 1D VIN BARCODE)
+  let html5QrcodeScanner;
+
   function startScanner() {
     const readerDiv = document.getElementById('reader');
     readerDiv.style.display = 'block';
 
+    // Konfigurasi khusus agar fokus membaca Barcode Garis (Code 128 / VIN)
+    const config = {
+      fps: 15,
+      qrbox: { width: 300, height: 120 }, // Kotak diperlebar agar muat garis barcode panjang
+      aspectRatio: 1.0,
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.QR_CODE
+      ]
+    };
+
     html5QrcodeScanner = new Html5Qrcode("reader");
     html5QrcodeScanner.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 250, height: 150 } },
+      config,
       (decodedText) => {
         document.getElementById('vinNo').value = decodedText;
         alert("Barcode VIN Berhasil Di-scan: " + decodedText);
@@ -158,7 +174,7 @@
         document.getElementById('btnStartScan').disabled = true;
       },
       (errorMessage) => {
-        // Log penanganan scan berjalan
+        // Proses pemindaian berulang
       }
     ).catch(err => {
       alert("Gagal membuka kamera: " + err);
