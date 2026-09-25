@@ -180,12 +180,18 @@
       exteriorPhotos: exteriorFiles
     };
 
-    fetch(GOOGLE_APPS_SCRIPT_URL, {
+    // PASTEKAN URL WEB APP APPS SCRIPT BARU ANDA DI BAWAH INI
+    const targetUrl = "https://script.google.com/macros/s/AKfycbx6Ewrpj02rjt_DzxRC1QC9Z6i2oopCxj4gwe6stjrnBjxWXWEFaf1wPjNVRVjp7QvH/exec";
+
+    fetch(targetUrl, {
       method: 'POST',
+      mode: 'no-cors', // Menembus blokir CORS Safari/iOS
+      headers: {
+        'Content-Type': 'text/plain'
+      },
       body: JSON.stringify(payload)
     })
-    .then(res => res.text())
-    .then(data => {
+    .then(() => {
       alert('Data dan foto berhasil terkirim ke Google Sheets!');
       document.getElementById('inspectionForm').reset();
       interiorFiles = [];
