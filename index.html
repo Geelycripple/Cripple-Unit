@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vehicle Inspection Form</title>
+  <!-- Library Scan Barcode/QR Code -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: #f4f6f8; margin: 0; padding: 16px; display: flex; justify-content: center; }
@@ -13,10 +15,13 @@
     .form-group { margin-bottom: 14px; }
     label { display: block; font-size: 0.85rem; font-weight: 600; color: #2d3748; margin-bottom: 5px; }
     input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 0.95rem; background: #fff; }
-    input:focus, select:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 3px rgba(49,130,206,0.2); }
+    input[readonly] { background-color: #edf2f7; color: #4a5568; cursor: not-allowed; font-weight: bold; }
     
-    .upload-area { border: 2px dashed #cbd5e0; border-radius: 8px; padding: 12px; text-align: center; background: #faf5ff; cursor: pointer; margin-bottom: 8px; transition: 0.2s; }
-    .upload-area:hover { background: #f3e8ff; border-color: #805ad5; }
+    .btn-scan { background: #38a169; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; width: 100%; margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-scan:hover { background: #2f855a; }
+    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 12px; display: none; }
+
+    .upload-area { border: 2px dashed #cbd5e0; border-radius: 8px; padding: 12px; text-align: center; background: #faf5ff; cursor: pointer; margin-bottom: 8px; }
     .upload-area p { margin: 0; font-size: 0.85rem; color: #6b46c1; font-weight: 600; }
     
     .preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
@@ -24,8 +29,7 @@
     .preview-item img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
     .remove-btn { position: absolute; top: 2px; right: 2px; background: rgba(229, 62, 62, 0.9); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
-    button.btn-submit { width: 100%; background: #3182ce; color: white; border: none; padding: 12px; font-size: 1rem; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 15px; transition: 0.2s; }
-    button.btn-submit:hover { background: #2b6cb0; }
+    button.btn-submit { width: 100%; background: #3182ce; color: white; border: none; padding: 12px; font-size: 1rem; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 15px; }
     button.btn-submit:disabled { background: #a0aec0; cursor: not-allowed; }
   </style>
 </head>
@@ -35,26 +39,34 @@
   <h2>Inspection & Sign Off Form</h2>
   
   <form id="inspectionForm">
+    <!-- SCANNER BARCODE -->
     <div class="form-group">
-      <label>VIN NO *</label>
-      <input type="text" id="vinNo" placeholder="Contoh: MGEE240BXTJ000208" required>
+      <label>VIN NO * (Scan Barcode)</label>
+      <button type="button" class="btn-scan" id="btnStartScan" onclick="startScanner()">📷 Scan Barcode VIN</button>
+      <div id="reader"></div>
+      <input type="text" id="vinNo" placeholder="Hasil Scan VIN akan muncul di sini" readonly required>
     </div>
 
+    <!-- CAR MODEL -->
     <div class="form-group">
       <label>CAR MODEL *</label>
-      <select id="carModel" required>
+      <select id="carModel" onchange="updateColorOptions()" required>
         <option value="">-- Pilih Car Model --</option>
-        <option value="E245">E245</option>
         <option value="P145">P145</option>
+        <option value="E245">E245</option>
         <option value="E22H">E22H</option>
       </select>
     </div>
 
+    <!-- BODY COLOR (DYNAMIC OPTIONS) -->
     <div class="form-group">
       <label>BODY COLOR *</label>
-      <input type="text" id="bodyColor" placeholder="Contoh: FROST GREY" required>
+      <select id="bodyColor" required disabled>
+        <option value="">-- Pilih Car Model Terlebih Dahulu --</option>
+      </select>
     </div>
 
+    <!-- LAST STATION -->
     <div class="form-group">
       <label>LAST STATION *</label>
       <select id="lastStation" required>
@@ -87,9 +99,74 @@
 </div>
 
 <script>
-  // PENTING: TEMPELKAN URL APPS SCRIPT BARU DARI LANGKAH 1 DI BAWAH INI
-  const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxf7uw08JcW-X3XOsZrZKXCjVtNOXyyxR2u7cKggD5pToz65RVCQPYX__0hqVK0RtIM/exec";
+  // PASTEKAN URL APPS SCRIPT ANDA DI SINI
+  const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-Oa5YtAfJicGA7wlLQi8LCm243A-Mymt7dqltijRUDhvhRjQXrO6LkJGkpXKsW71P/exec";
 
+  // DATA PILIHAN WARNA BERDASARKAN MODEL
+  const colorData = {
+    "P145": ["MOYU BLACK", "SIMPLE WHITE", "PEARL SILVER", "SUPERSONIC GREEN", "CHINA BLUE", "TWILIGHT GRAY"],
+    "E245": ["Carbon Black", "Moonlight Silvery", "Turquoise Green", "Frost Grey", "Snowy White"],
+    "E22H": ["Satin Silver", "Magnetic Grey", "Athens White", "Porcelain Pink", "Cheese Yellow", "Aurora Blue", "Dopamine Green"]
+  };
+
+  function updateColorOptions() {
+    const modelSelect = document.getElementById('carModel').value;
+    const colorSelect = document.getElementById('bodyColor');
+
+    colorSelect.innerHTML = '';
+
+    if (modelSelect && colorData[modelSelect]) {
+      colorSelect.disabled = false;
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = "";
+      defaultOpt.innerText = "-- Pilih Body Color --";
+      colorSelect.appendChild(defaultOpt);
+
+      colorData[modelSelect].forEach(color => {
+        const opt = document.createElement('option');
+        opt.value = color;
+        opt.innerText = color;
+        colorSelect.appendChild(opt);
+      });
+    } else {
+      colorSelect.disabled = true;
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = "";
+      defaultOpt.innerText = "-- Pilih Car Model Terlebih Dahulu --";
+      colorSelect.appendChild(defaultOpt);
+    }
+  }
+
+  // SCANNER BARCODE IMPLEMENTATION
+  let html5QrcodeScanner;
+
+  function startScanner() {
+    const readerDiv = document.getElementById('reader');
+    readerDiv.style.display = 'block';
+
+    html5QrcodeScanner = new Html5Qrcode("reader");
+    html5QrcodeScanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 150 } },
+      (decodedText) => {
+        document.getElementById('vinNo').value = decodedText;
+        alert("Barcode VIN Berhasil Di-scan: " + decodedText);
+        html5QrcodeScanner.stop();
+        readerDiv.style.display = 'none';
+        document.getElementById('btnStartScan').innerText = "✅ VIN Berhasil Di-scan";
+        document.getElementById('btnStartScan').style.background = "#4a5568";
+        document.getElementById('btnStartScan').disabled = true;
+      },
+      (errorMessage) => {
+        // Log penanganan scan berjalan
+      }
+    ).catch(err => {
+      alert("Gagal membuka kamera: " + err);
+      readerDiv.style.display = 'none';
+    });
+  }
+
+  // MANAGEMENT FOTO & KOMPRESI
   let interiorFiles = [];
   let exteriorFiles = [];
 
@@ -165,16 +242,22 @@
     renderPreviews(type);
   }
 
+  // SUBMIT FORM
   document.getElementById('inspectionForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
+    const vinVal = document.getElementById('vinNo').value;
+    if (!vinVal) {
+      alert("Harap lakukan Scan Barcode VIN terlebih dahulu!");
+      return;
+    }
+
     const btn = document.getElementById('submitBtn');
     btn.disabled = true;
     btn.innerText = 'MENGIRIM DATA...';
 
-    // Format data URL Form Standar (Aman untuk iOS Safari)
     const formData = new URLSearchParams();
-    formData.append('vinNo', document.getElementById('vinNo').value);
+    formData.append('vinNo', vinVal);
     formData.append('carModel', document.getElementById('carModel').value);
     formData.append('bodyColor', document.getElementById('bodyColor').value);
     formData.append('lastStation', document.getElementById('lastStation').value);
@@ -190,18 +273,12 @@
       body: formData
     })
     .then(() => {
-      alert('Data dan foto berhasil terkirim ke Google Sheets!');
-      document.getElementById('inspectionForm').reset();
-      interiorFiles = [];
-      exteriorFiles = [];
-      renderPreviews('interior');
-      renderPreviews('exterior');
+      alert('Data dan foto berhasil terkirim!');
+      location.reload(); // Refresh form setelah berhasil
     })
     .catch(err => {
       alert('Gagal mengirim data. Coba lagi.');
       console.error(err);
-    })
-    .finally(() => {
       btn.disabled = false;
       btn.innerText = 'SUBMIT DATA';
     });
