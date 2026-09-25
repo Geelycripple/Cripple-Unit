@@ -99,17 +99,45 @@
 
     for (let file of files) {
       if (list.length < max) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          list.push(e.target.result);
+        // Otomatis kompres foto sebelum disimpan
+        compressImage(file, 800, 0.7, function(compressedBase64) {
+          list.push(compressedBase64);
           renderPreviews(type);
-        };
-        reader.readAsDataURL(file);
+        });
       } else {
         alert("Maksimal 6 foto per kategori!");
         break;
       }
     }
+  }
+
+  // Fungsi Kompresi Foto (Mengecilkan ukuran file tanpa merusak kualitas)
+  function compressImage(file, maxWidth, quality, callback) {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = function(event) {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Mengubah ke Format JPEG ringan
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        callback(dataUrl);
+      };
+    };
   }
 
   function renderPreviews(type) {
