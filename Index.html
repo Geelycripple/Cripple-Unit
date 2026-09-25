@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vehicle Inspection Form</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f4f6f8; margin: 0; padding: 16px; display: flex; justify-content: center; }
+    .card { background: white; width: 100%; max-width: 500px; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    h2 { margin-top: 0; color: #1a202c; border-bottom: 2px solid #edf2f7; padding-bottom: 10px; font-size: 1.2rem; }
+    .section-title { font-size: 0.9rem; font-weight: bold; color: #4a5568; margin-top: 15px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; color: #2d3748; margin-bottom: 5px; }
+    input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 0.95rem; background: #fff; }
+    input:focus, select:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 3px rgba(49,130,206,0.2); }
+    
+    .upload-area { border: 2px dashed #cbd5e0; border-radius: 8px; padding: 12px; text-align: center; background: #faf5ff; cursor: pointer; margin-bottom: 8px; transition: 0.2s; }
+    .upload-area:hover { background: #f3e8ff; border-color: #805ad5; }
+    .upload-area p { margin: 0; font-size: 0.85rem; color: #6b46c1; font-weight: 600; }
+    
+    .preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+    .preview-item { position: relative; width: 100%; padding-top: 100%; border-radius: 6px; overflow: hidden; background: #edf2f7; }
+    .preview-item img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+    .remove-btn { position: absolute; top: 2px; right: 2px; background: rgba(229, 62, 62, 0.9); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+    button.btn-submit { width: 100%; background: #3182ce; color: white; border: none; padding: 12px; font-size: 1rem; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 15px; transition: 0.2s; }
+    button.btn-submit:hover { background: #2b6cb0; }
+    button.btn-submit:disabled { background: #a0aec0; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Inspection & Sign Off Form</h2>
+  
+  <form id="inspectionForm">
+    <div class="form-group">
+      <label>VIN NO *</label>
+      <input type="text" id="vinNo" placeholder="Contoh: MGEE240BXTJ000208" required>
+    </div>
+
+    <div class="form-group">
+      <label>CAR MODEL *</label>
+      <select id="carModel" required>
+        <option value="">-- Pilih Car Model --</option>
+        <option value="E245">E245</option>
+        <option value="P145">P145</option>
+        <option value="E22H">E22H</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>BODY COLOR *</label>
+      <input type="text" id="bodyColor" placeholder="Contoh: FROST GREY" required>
+    </div>
+
+    <div class="form-group">
+      <label>LAST STATION *</label>
+      <select id="lastStation" required>
+        <option value="">-- Pilih Last Station --</option>
+        <option value="Inspection">Inspection</option>
+        <option value="Sign Off">Sign Off</option>
+        <option value="FAI Out">FAI Out</option>
+        <option value="Engine Dock">Engine Dock</option>
+      </select>
+    </div>
+
+    <!-- EVIDENCE INTERIOR -->
+    <div class="section-title">Evidence Interior (Maksimal 6 Foto)</div>
+    <div class="upload-area" onclick="document.getElementById('interiorInput').click()">
+      <p>+ Upload Foto Interior (<span id="intCount">0</span>/6)</p>
+      <input type="file" id="interiorInput" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files, 'interior')">
+    </div>
+    <div class="preview-grid" id="interiorPreview"></div>
+
+    <!-- EVIDENCE EXTERIOR -->
+    <div class="section-title">Evidence Exterior (Maksimal 6 Foto)</div>
+    <div class="upload-area" onclick="document.getElementById('exteriorInput').click()">
+      <p>+ Upload Foto Exterior (<span id="extCount">0</span>/6)</p>
+      <input type="file" id="exteriorInput" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files, 'exterior')">
+    </div>
+    <div class="preview-grid" id="exteriorPreview"></div>
+
+    <button type="submit" class="btn-submit" id="submitBtn">SUBMIT DATA</button>
+  </form>
+</div>
+
+<script>
+  // PASTEKAN URL APPS SCRIPT ANDA DI SINI
+  const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwtUsHBvQiINB9O5do4TNQ1uLlU3Z1_Ue1tcZZoUJsYBYvJ3MFEDR_blsNoJ-EQXP9G/exec";
+
+  let interiorFiles = [];
+  let exteriorFiles = [];
+
+  function handleFiles(files, type) {
+    const list = type === 'interior' ? interiorFiles : exteriorFiles;
+    const max = 6;
+
+    for (let file of files) {
+      if (list.length < max) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          list.push(e.target.result);
+          renderPreviews(type);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        alert("Maksimal 6 foto per kategori!");
+        break;
+      }
+    }
+  }
+
+  function renderPreviews(type) {
+    const list = type === 'interior' ? interiorFiles : exteriorFiles;
+    const previewContainer = document.getElementById(type + 'Preview');
+    const countLabel = document.getElementById(type === 'interior' ? 'intCount' : 'extCount');
+    
+    previewContainer.innerHTML = '';
+    countLabel.innerText = list.length;
+
+    list.forEach((base64, index) => {
+      const item = document.createElement('div');
+      item.className = 'preview-item';
+      item.innerHTML = `
+        <img src="${base64}">
+        <button type="button" class="remove-btn" onclick="removeFile('${type}', ${index})">✕</button>
+      `;
+      previewContainer.appendChild(item);
+    });
+  }
+
+  function removeFile(type, index) {
+    if (type === 'interior') {
+      interiorFiles.splice(index, 1);
+    } else {
+      exteriorFiles.splice(index, 1);
+    }
+    renderPreviews(type);
+  }
+
+  document.getElementById('inspectionForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    if (GOOGLE_APPS_SCRIPT_URL === "URL_GOOGLE_APPS_SCRIPT_ANDA_DI_SINI") {
+      alert("Harap ganti GOOGLE_APPS_SCRIPT_URL dengan link Apps Script Anda!");
+      return;
+    }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerText = 'MENGIRIM DATA...';
+
+    const payload = {
+      vinNo: document.getElementById('vinNo').value,
+      carModel: document.getElementById('carModel').value,
+      bodyColor: document.getElementById('bodyColor').value,
+      lastStation: document.getElementById('lastStation').value,
+      interiorPhotos: interiorFiles,
+      exteriorPhotos: exteriorFiles
+    };
+
+    fetch(GOOGLE_APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+    .then(res => res.text())
+    .then(data => {
+      alert('Data dan foto berhasil terkirim ke Google Sheets!');
+      document.getElementById('inspectionForm').reset();
+      interiorFiles = [];
+      exteriorFiles = [];
+      renderPreviews('interior');
+      renderPreviews('exterior');
+    })
+    .catch(err => {
+      alert('Gagal mengirim data. Coba lagi.');
+      console.error(err);
+    })
+    .finally(() => {
+      btn.disabled = false;
+      btn.innerText = 'SUBMIT DATA';
+    });
+  });
+</script>
+
+</body>
+</html>
