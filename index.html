@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vehicle Inspection Form</title>
-  <!-- Library ZXing: Engine Barcode Industri (Super Cepat & Tajam) -->
+  <!-- Library ZXing & Quagga untuk Dekoding Barcode 1D Industri -->
   <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: #f4f6f8; margin: 0; padding: 16px; display: flex; justify-content: center; }
@@ -15,15 +16,18 @@
     .form-group { margin-bottom: 14px; }
     label { display: block; font-size: 0.85rem; font-weight: 600; color: #2d3748; margin-bottom: 5px; }
     input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 0.95rem; background: #fff; }
-    input[readonly] { background-color: #edf2f7; color: #4a5568; cursor: not-allowed; font-weight: bold; }
+    input[readonly] { background-color: #edf2f7; color: #2b6cb0; font-weight: bold; cursor: not-allowed; letter-spacing: 0.5px; }
     
-    .btn-scan { background: #38a169; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; width: 100%; margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem; }
+    .scan-options { display: flex; gap: 8px; margin-bottom: 8px; }
+    .btn-scan { flex: 1; background: #38a169; color: white; border: none; padding: 11px 6px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.82rem; text-align: center; }
+    .btn-photo { flex: 1; background: #805ad5; color: white; border: none; padding: 11px 6px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.82rem; text-align: center; }
     .btn-scan:hover { background: #2f855a; }
-    
-    /* Container Video Kamera High-Definition */
-    #scannerContainer { display: none; position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; margin-bottom: 12px; }
-    #video { width: 100%; height: 220px; object-fit: cover; }
-    .scan-guide { position: absolute; top: 50%; left: 10%; right: 10%; height: 2px; background: #e53e3e; box-shadow: 0 0 8px #e53e3e; transform: translateY(-50%); }
+    .btn-photo:hover { background: #6b46c1; }
+
+    #interactive.viewport { position: relative; width: 100%; height: 220px; overflow: hidden; border-radius: 8px; display: none; margin-bottom: 10px; background: #000; }
+    #interactive.viewport video { width: 100%; height: 100%; object-fit: cover; }
+    #interactive.viewport canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    .scan-guide { position: absolute; top: 50%; left: 5%; right: 5%; height: 2px; background: #e53e3e; box-shadow: 0 0 8px #e53e3e; z-index: 10; transform: translateY(-50%); }
 
     .upload-area { border: 2px dashed #cbd5e0; border-radius: 8px; padding: 12px; text-align: center; background: #faf5ff; cursor: pointer; margin-bottom: 8px; }
     .upload-area p { margin: 0; font-size: 0.85rem; color: #6b46c1; font-weight: 600; }
@@ -45,15 +49,21 @@
   <form id="inspectionForm">
     <!-- SCANNER BARCODE -->
     <div class="form-group">
-      <label>VIN NO * (Scan Barcode)</label>
-      <button type="button" class="btn-scan" id="btnStartScan" onclick="startScanner()">📷 Scan Barcode VIN</button>
-      
-      <div id="scannerContainer">
-        <video id="video"></video>
+      <label>VIN NO *</label>
+      <div class="scan-options">
+        <button type="button" class="btn-scan" id="btnLive" onclick="startLiveScan()">📷 Live Scan Kamera</button>
+        <button type="button" class="btn-photo" onclick="document.getElementById('fileBarcode').click()">📸 Foto Barcode / Galeri</button>
+        <input type="file" id="fileBarcode" accept="image/*" style="display:none" onchange="scanImageBarcode(this)">
+      </div>
+
+      <div id="interactive" class="viewport">
         <div class="scan-guide"></div>
       </div>
       
       <input type="text" id="vinNo" placeholder="Hasil Scan VIN akan muncul di sini" readonly required>
+      <small style="color:#718096; font-size:0.75rem; margin-top:4px; display:block;">
+        *Gunakan "Foto Barcode" jika live kamera sulit fokus.
+      </small>
     </div>
 
     <!-- CAR MODEL -->
@@ -108,7 +118,6 @@
 </div>
 
 <script>
-  // PASTEKAN URL APPS SCRIPT ANDA DI SINI
   const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyrd5BcB8uQ83Nw0ItxXL4UJ0I0LPuAjz7gQKcdm1VisSqwu8VLSXV1sxzd6RT-yKvk/exec";
 
   // DATA WARNA DINAMIS
@@ -121,7 +130,6 @@
   function updateColorOptions() {
     const modelSelect = document.getElementById('carModel').value;
     const colorSelect = document.getElementById('bodyColor');
-
     colorSelect.innerHTML = '';
 
     if (modelSelect && colorData[modelSelect]) {
@@ -146,64 +154,80 @@
     }
   }
 
-  // IMPLEMENTASI ZXING SCANNER (WECOM-STYLE ULTRA-FAST SCANNER)
-  let codeReader = null;
-
-  function startScanner() {
-    const container = document.getElementById('scannerContainer');
+  // 1. LIVE CAMERA SCANNER (QUAGGA2 ENHANCED)
+  function startLiveScan() {
+    const container = document.getElementById('interactive');
     container.style.display = 'block';
 
-    codeReader = new ZXing.BrowserMultiFormatReader();
-    
-    // Paksa Kamera menggunakan Resolusi HD 1080p agar Garis Barcode Tajam
-    const hints = new Map();
-    const formats = [
-      ZXing.BarcodeFormat.CODE_128,
-      ZXing.BarcodeFormat.CODE_39,
-      ZXing.BarcodeFormat.EAN_13,
-      ZXing.BarcodeFormat.QR_CODE
-    ];
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-
-    codeReader.decodeFromConstraints(
-      {
-        video: {
-          facingMode: { exact: "environment" },
+    Quagga.init({
+      inputStream: {
+        name: "Live",
+        type: "LiveStream",
+        target: container,
+        constraints: {
           width: { min: 1280, ideal: 1920 },
-          height: { min: 720, ideal: 1080 }
+          height: { min: 720, ideal: 1080 },
+          facingMode: "environment"
         }
       },
-      'video',
-      (result, err) => {
-        if (result) {
-          const vinScanned = result.getText();
-          document.getElementById('vinNo').value = vinScanned;
-          alert("Barcode VIN Berhasil Di-scan: " + vinScanned);
-          
-          codeReader.reset();
+      decoder: {
+        readers: ["code_128_reader", "code_39_reader", "code_39_vin_reader", "ean_reader"]
+      },
+      locate: true
+    }, function(err) {
+      if (err) {
+        alert("Gagal membuka kamera: " + err);
+        container.style.display = 'none';
+        return;
+      }
+      Quagga.start();
+    });
+
+    Quagga.onDetected(function(result) {
+      if (result && result.codeResult && result.codeResult.code) {
+        const code = result.codeResult.code;
+        if (code.length >= 8) { // Validasi nomor VIN
+          document.getElementById('vinNo').value = code;
+          alert("VIN Berhasil Di-scan: " + code);
+          Quagga.stop();
           container.style.display = 'none';
-          document.getElementById('btnStartScan').innerText = "✅ VIN Berhasil Di-scan";
-          document.getElementById('btnStartScan').style.background = "#4a5568";
-          document.getElementById('btnStartScan').disabled = true;
         }
       }
-    ).catch(err => {
-      // Fallback jika tidak mendukung 'exact environment'
-      codeReader.decodeFromVideoDevice(null, 'video', (result) => {
-        if (result) {
-          document.getElementById('vinNo').value = result.getText();
-          alert("Barcode VIN Berhasil Di-scan: " + result.getText());
-          codeReader.reset();
-          container.style.display = 'none';
-          document.getElementById('btnStartScan').innerText = "✅ VIN Berhasil Di-scan";
-          document.getElementById('btnStartScan').style.background = "#4a5568";
-          document.getElementById('btnStartScan').disabled = true;
-        }
-      });
     });
   }
 
-  // FOTO & KOMPRESI
+  // 2. FOTO BARCODE / UPLOAD FILE SCANNER (ZXING OCR ENGINE)
+  function scanImageBarcode(input) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+    const imgUrl = URL.createObjectURL(file);
+
+    codeReader.decodeFromImageUrl(imgUrl)
+      .then(result => {
+        document.getElementById('vinNo').value = result.getText();
+        alert("Barcode VIN Berhasil Terbaca dari Foto: " + result.getText());
+      })
+      .catch(err => {
+        // Fallback coba scan ulang dengan Quagga2 Image Decoder
+        Quagga.decodeSingle({
+          src: imgUrl,
+          numOfWorkers: 0,
+          inputStream: { size: 1280 },
+          decoder: { readers: ["code_128_reader", "code_39_reader"] }
+        }, function(result) {
+          if (result && result.codeResult) {
+            document.getElementById('vinNo').value = result.codeResult.code;
+            alert("Barcode VIN Berhasil Terbaca: " + result.codeResult.code);
+          } else {
+            alert("Gagal membaca barcode dari foto. Pastikan gambar jelas dan tidak terlalu silau!");
+          }
+        });
+      });
+  }
+
+  // MANAGEMENT FOTO INTERIOR & EXTERIOR
   let interiorFiles = [];
   let exteriorFiles = [];
 
@@ -285,7 +309,7 @@
     
     const vinVal = document.getElementById('vinNo').value;
     if (!vinVal) {
-      alert("Harap lakukan Scan Barcode VIN terlebih dahulu!");
+      alert("Harap lakukan Scan / Foto Barcode VIN terlebih dahulu!");
       return;
     }
 
